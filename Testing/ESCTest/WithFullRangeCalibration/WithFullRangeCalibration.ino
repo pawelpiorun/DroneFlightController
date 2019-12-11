@@ -9,7 +9,6 @@
  * in order to show the minimum value to ESC.
  * - 1 short beep will state that lower range value has been detected.
  * - 1 long beep will be a message "Ready to fly"
- * - entering
  * 
  * Read SimonK ESC startup procedure for more info.
  * It is possible to initialize esc pulse with 1000us, but the upper value will not be detected.
