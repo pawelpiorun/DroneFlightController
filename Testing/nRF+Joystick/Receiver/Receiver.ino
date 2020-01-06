@@ -1,5 +1,5 @@
 #define SHOWVALUES
-#define SHOWTIMES
+//#define SHOWTIMES
 
 #include <RF24.h>
 #include <SPI.h> 
@@ -50,16 +50,16 @@ void loop()
 
     Serial.print("Yaw: ");
     Serial.print(data[0]);
-    Serial.print("\t");
+    Serial.print("\t\t");
     Serial.print("Throttle: ");
     Serial.print(data[1]);
-    Serial.print("\t");
+    Serial.print("\t\t");
     Serial.print("Roll: ");
     Serial.print(data[2]);
-    Serial.print("\t");
+    Serial.print("\t\t");
     Serial.print("Pitch: ");
     Serial.print(data[3]);
-    Serial.print("\t"); 
+    Serial.print("\t\t"); 
       
 #endif
 
