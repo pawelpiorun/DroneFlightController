@@ -69,7 +69,7 @@ void loop()
 
 bool checkI2C()
 {
-  Serial.print(">>> Checking I2C clock speed.");
+  Serial.println(">>> Checking I2C clock speed.");
   delay(1000);
 
   TWBR = 12;                      //Set the I2C clock speed to 400kHz.
@@ -116,9 +116,9 @@ bool checkReceiver()
     error = true;
   }
   Serial.print("Throttle: "); Serial.print(receiverThrottle);
-  Serial.print("Yaw: "); Serial.print(receiverYaw);
-  Serial.print("Pitch: "); Serial.print(receiverPitch);
-  Serial.print("Roll: "); Serial.print(receiverRoll);
+  Serial.print("\tYaw: "); Serial.print(receiverYaw);
+  Serial.print("\tPitch: "); Serial.print(receiverPitch);
+  Serial.println("\tRoll: "); Serial.print(receiverRoll);
 
   if (error)
     Serial.println("... Corrupted receiver data. ERROR!!!!!!");
@@ -197,7 +197,7 @@ bool checkGyro()
 void startGyro()
 {
   Serial.println(">>> Starting gyro.");
-  
+
   Wire.beginTransmission(gyroAddress);                             //Start communication with the gyro
   Wire.write(0x6B);                                            //PWR_MGMT_1 register
   Wire.write(0x00);                                            //Set to zero to turn on the gyro
@@ -230,7 +230,7 @@ void startGyro()
 void calibrateGyro()
 {
   Serial.println(">>> Calibrating gyro will start in 3 seconds. DONT MOVE THE QUADCOPTER!!!");
-  Serial.println("."); delay(1000); Serial.println("."); delay(1000); Serial.println("."); delay(1000);
+  Serial.println("..."); delay(1000); Serial.println("."); delay(1000); Serial.println("."); delay(1000);
   Serial.println(">>> Calibrating gyro, please wait...");
 
   for (int i = 0; i < 2000 ; i++)
@@ -246,6 +246,7 @@ void calibrateGyro()
   gyroRollOffset /= 2000;                                       //Divide the roll total by 2000.
   gyroPitchOffset /= 2000;                                      //Divide the pitch total by 2000.
   gyroYawOffset /= 2000;                                        //Divide the yaw total by 2000.
+  gyroCalibrationDone = true;
 
   Serial.println();
   Serial.print("... Axis 1 offset=");
@@ -266,16 +267,20 @@ void readGyroSignals()
   Wire.requestFrom(gyroAddress, 6);                                //Request 6 bytes from the gyro
   while (Wire.available() < 6);                                //Wait until the 6 bytes are received
 
-  gyroRoll = Wire.read() << 8 | Wire.read();                   //Read high and low part of the angular data
   gyroPitch = Wire.read() << 8 | Wire.read();                  //Read high and low part of the angular data
+  gyroRoll = Wire.read() << 8 | Wire.read();                   //Read high and low part of the angular data
   gyroYaw = Wire.read() << 8 | Wire.read();                    //Read high and low part of the angular data
 
   if (gyroCalibrationDone)                                     //Only compensate after the calibration
   {
-    gyroYaw -= gyroYawOffset;
     gyroRoll -= gyroRollOffset;
     gyroPitch -= gyroPitchOffset;
+    gyroYaw -= gyroYawOffset;
   }
+
+  //Serial.print("Yaw: "); Serial.print(gyroYaw);
+  //Serial.print("\t\tPitch: "); Serial.print(gyroPitch);
+  //Serial.print("\t\tRoll: "); Serial.println(gyroRoll);
 }
 
 bool checkGyroAxes()
@@ -304,7 +309,8 @@ bool checkGyroAxis(int axis)
 
   int triggeredAxis = 0;
   float gyroRollAngle = 0, gyroPitchAngle = 0, gyroYawAngle = 0;
-
+  delay(2000);
+  
   unsigned long timer = millis() + 10000;
   while (timer > millis() && abs(gyroRollAngle) < 30 && abs(gyroPitchAngle) < 30 && abs(gyroYawAngle) < 30)
   {
@@ -313,6 +319,9 @@ bool checkGyroAxis(int axis)
     gyroPitchAngle += gyroPitch * 0.0000611;
     gyroYawAngle += gyroYaw * 0.0000611;
     delayMicroseconds(3700);
+    Serial.print("Yaw: "); Serial.print(gyroYawAngle);
+    Serial.print("\t\tPitch: "); Serial.print(gyroPitchAngle);
+    Serial.print("\t\tRoll: "); Serial.println(gyroRollAngle);
   }
 
   if (abs(gyroRollAngle) > 30)
