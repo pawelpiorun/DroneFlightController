@@ -46,7 +46,7 @@ void loop()
       Serial.print(".");
     }
 
-  Serial.println("Flight controller calibration program.");
+  Serial.println("Flight controller calibration started.");
 
   if (checkI2C()) return;
   if (checkReceiver()) return;
@@ -87,6 +87,7 @@ bool checkI2C()
     error = true;
   }
 
+  delay(2000);
   return error;
 }
 
@@ -104,7 +105,7 @@ bool checkReceiver()
       Serial.println("... Data arrived.");
       dataArrived = true;
       readReceiver();
-      if (checkReceiverData()) error = true;
+      error = checkReceiverData();
       break;
     }
   }
@@ -114,12 +115,17 @@ bool checkReceiver()
     Serial.println("... Data did not arrived! ERROR!!!!!");
     error = true;
   }
+  Serial.print("Throttle: "); Serial.print(receiverThrottle);
+  Serial.print("Yaw: "); Serial.print(receiverYaw);
+  Serial.print("Pitch: "); Serial.print(receiverPitch);
+  Serial.print("Roll: "); Serial.print(receiverRoll);
 
   if (error)
     Serial.println("... Corrupted receiver data. ERROR!!!!!!");
   else
     Serial.println("... Data received properly. OK!");
 
+  delay(2000);
   return error;
 }
 
@@ -131,7 +137,7 @@ void readReceiver()
     receiverYaw = receiverData[0];
     receiverThrottle = receiverData[1];
     receiverRoll = receiverData[2];
-    receiverPitch - receiverData[3];
+    receiverPitch = receiverData[3];
   }
 }
 
@@ -160,6 +166,8 @@ bool checkGyro()
   lowByte = Wire.read();
   if (lowByte == 0x68) found = true;
 
+  delay(2000);
+
   if (!found) {
     gyroAddress = 0x69;
     Serial.println("... Searching for MPU-6050 on address 0x69/105");
@@ -173,15 +181,23 @@ bool checkGyro()
     if (lowByte == 0x68) found = true;
   }
 
+  delay(2000);
+
   if (!found)
     Serial.println("... No gyro device found!!! ERROR!!!");
   else
     Serial.println("... MPU-6050 gyro found! Showing register settings...");
-  return found;
+
+  delay(2000);
+
+  error = !found;
+  return error;
 }
 
 void startGyro()
 {
+  Serial.println(">>> Starting gyro.");
+  
   Wire.beginTransmission(gyroAddress);                             //Start communication with the gyro
   Wire.write(0x6B);                                            //PWR_MGMT_1 register
   Wire.write(0x00);                                            //Set to zero to turn on the gyro
@@ -207,6 +223,8 @@ void startGyro()
   while (Wire.available() < 1);                                //Wait until the 1 byte is received
   Serial.print("... Register 0x1B is set to:");
   Serial.println(Wire.read(), BIN);
+
+  delay(2000);
 }
 
 void calibrateGyro()
@@ -237,6 +255,7 @@ void calibrateGyro()
   Serial.print("... Axis 3 offset=");
   Serial.println(gyroYawOffset);
   Serial.println();
+  delay(2000);
 }
 
 void readGyroSignals()
@@ -261,7 +280,8 @@ void readGyroSignals()
 
 bool checkGyroAxes()
 {
-  return checkGyroAxis(1) || checkGyroAxis(2) || checkGyroAxis(3);
+  error = checkGyroAxis(1) || checkGyroAxis(2) || checkGyroAxis(3);
+  return error;
 }
 
 bool checkGyroAxis(int axis)
@@ -282,12 +302,11 @@ bool checkGyroAxis(int axis)
     Serial.println(">>> Please rotate nose right to 45 degrees.");
   }
 
-  bool error = false;
   int triggeredAxis = 0;
   float gyroRollAngle = 0, gyroPitchAngle = 0, gyroYawAngle = 0;
 
   unsigned long timer = millis() + 10000;
-  while (timer > millis && abs(gyroRollAngle) < 30 && abs(gyroPitchAngle) < 30 && abs(gyroYawAngle) < 30)
+  while (timer > millis() && abs(gyroRollAngle) < 30 && abs(gyroPitchAngle) < 30 && abs(gyroYawAngle) < 30)
   {
     readGyroSignals();
     gyroRollAngle += gyroRoll * 0.0000611;          // 0.0000611 = 1 / 65.5 (LSB degr/s) / 250(Hz)
@@ -296,7 +315,7 @@ bool checkGyroAxis(int axis)
     delayMicroseconds(3700);
   }
 
-  if (abs(gyroRollAngle) < 30)
+  if (abs(gyroRollAngle) > 30)
   {
     if (axis == 1)
       Serial.println("... Roll axis OK!");
@@ -307,7 +326,7 @@ bool checkGyroAxis(int axis)
     }
     triggeredAxis = 1;
   }
-  else if (abs(gyroPitchAngle) < 30)
+  else if (abs(gyroPitchAngle) > 30)
   {
     if (axis == 2)
       Serial.println("... Pitch axis OK!");
@@ -318,7 +337,7 @@ bool checkGyroAxis(int axis)
     }
     triggeredAxis = 2;
   }
-  else if (abs(gyroYawAngle) < 30)
+  else if (abs(gyroYawAngle) > 30)
   {
     if (axis == 3)
       Serial.println("... Yaw axis OK!");
@@ -330,11 +349,12 @@ bool checkGyroAxis(int axis)
     triggeredAxis = 3;
   }
 
-if (triggeredAxis == 0)
-{
-  Serial.println("... No axis detected! ERROR!");
-  error = true;
-}
+  if (triggeredAxis == 0)
+  {
+    Serial.println("... No axis detected! ERROR!");
+    error = true;
+  }
 
+  delay(2000);
   return error;
 }
