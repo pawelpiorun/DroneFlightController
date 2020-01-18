@@ -30,9 +30,9 @@ void setup()
 
   radio.begin();
   radio.openReadingPipe(0, txAdress);
-  radio.setPALevel(RF24_PA_MIN);      //one of four levels (MIN, LOW, HIGH, MAX)
+  radio.setPALevel(RF24_PA_MIN);      // one of four levels (MIN, LOW, HIGH, MAX)
   radio.setDataRate(RF24_2MBPS);      // or 250KBPS or 2Mbps
-  //radio.startListening();
+  //radio.startListening();           // start listening later
 
   Wire.begin();
   Serial.begin(115200);
@@ -88,6 +88,7 @@ bool checkI2C()
   }
 
   delay(2000);
+  Serial.println();
   return error;
 }
 
@@ -126,6 +127,7 @@ bool checkReceiver()
     Serial.println("... Data received properly. OK!");
 
   delay(2000);
+  Serial.println();
   return error;
 }
 
@@ -189,6 +191,7 @@ bool checkGyro()
     Serial.println("... MPU-6050 gyro found! Showing register settings...");
 
   delay(2000);
+  Serial.println();
 
   error = !found;
   return error;
@@ -225,12 +228,13 @@ void startGyro()
   Serial.println(Wire.read(), BIN);
 
   delay(2000);
+  Serial.println();
 }
 
 void calibrateGyro()
 {
   Serial.println(">>> Calibrating gyro will start in 3 seconds. DONT MOVE THE QUADCOPTER!!!");
-  Serial.println("..."); delay(1000); Serial.println("."); delay(1000); Serial.println("."); delay(1000);
+  Serial.print("."); delay(1000); Serial.print("."); delay(1000); Serial.println("... Starting calibration."); delay(1000);
   Serial.println(">>> Calibrating gyro, please wait...");
 
   for (int i = 0; i < 2000 ; i++)
@@ -365,5 +369,6 @@ bool checkGyroAxis(int axis)
   }
 
   delay(2000);
+  Serial.println();
   return error;
 }
