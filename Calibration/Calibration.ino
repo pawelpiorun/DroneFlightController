@@ -1,21 +1,26 @@
-#define refreshPeriod  4000 // us
+#define   refreshPeriod     4000 // us
 
-#define MAX_THROTTLE 2000
-#define MIN_THROTTLE 1000
+#define   MAX_THROTTLE      2000
+#define   MIN_THROTTLE      1000
 
-#define   redPin      6
-#define   greenPin    A1
-#define   bluePin     0
+#define   redPin            6
+#define   greenPin          A1
+#define   bluePin           1
 
-#define   CE          7
-#define   CS          8
+#define   CE                7
+#define   CS                8
 
-#define escPinFL      3
-#define escPinFR      4
-#define escPinRR      9
-#define escPinRL      10
+#define   escPinFL          3
+#define   escPinFR          4
+#define   escPinRR          9
+#define   escPinRL          10
 
-#define voltagePin    A6
+#define   batteryPin        A6
+#define   MIN_BAT_ON_VOLT   80000
+#define   MAX_MEAS_VOLT     12650
+#define   MIN_BAT_VOLT      10000
+#define   MAX_BAT_VOLT      12600
+#define   DIODE_MIN_VOLT    400
 
 #include <Wire.h>
 #include <EEPROM.h>
@@ -39,14 +44,21 @@ bool gyroCalibrationDone = false;
 
 // Accelerometer
 int accX, accY, accZ;
-double accVector;
+float accVector;
 
 // Angles
-float angleRoll, anglePitch, angleYaw;
+float angleRoll = 0, anglePitch = 0;
+float angleRollAcc = 0, anglePitchAcc = 0;
 bool firstAngle = false;
 
 // ESCs
 int escPulseFL, escPulseFR, escPulseRR, escPulseRL;
+
+// Battery
+int batteryVoltage; // mV
+float voltageFactor = MAX_MEAS_VOLT / 1023;
+int diodeCompensation = DIODE_MIN_VOLT / voltageFactor;
+float filterF1 = 0.92; float filterF2 = 0.08;
 
 // State
 bool start = false;
@@ -64,6 +76,8 @@ void setup()
   pinMode(escPinFR, OUTPUT);
   pinMode(escPinRR, OUTPUT);
   pinMode(escPinRL, OUTPUT);
+
+  pinMode(batteryPin, INPUT);
 
   radio.begin();
   radio.openReadingPipe(0, txAdress);
@@ -99,7 +113,63 @@ void loop()
 
   if (state == 0)
   {
-    // ESC calibration, wait for minimum throttle
+    if (loopCounter == 0)
+    {
+      Serial.println(">>> Checking battery voltage.");
+    }
+
+    int currentFactor = (analogRead(batteryPin) + diodeCompensation) * filterF2 * voltageFactor;
+    int previousFactor = batteryVoltage * filterF1;
+    batteryVoltage = previousFactor + currentFactor;
+
+    if (batteryVoltage < MAX_BAT_VOLT && batteryVoltage > MIN_BAT_ON_VOLT)
+      digitalWrite(redPin, HIGH);
+
+    if (loopCounter % 125 == 0)
+    {
+      Serial.print("... Battery voltage: ");
+      Serial.print((float) batteryVoltage / 1000);
+      Serial.println(" V");
+    }
+
+    loopCounter++;
+    if (loopCounter == 2000)
+    {
+      state++;
+      loopCounter = 0;
+    }
+
+  }
+
+  if (state == 1)
+  {
+    if (loopCounter == 0)
+    {
+      Serial.println(">>> Checking LED's.");
+      digitalWrite(redPin, LOW);
+      //digitalWrite(bluePin, LOW);
+      digitalWrite(greenPin, LOW);
+    }
+
+    loopCounter++;
+
+    if (loopCounter % 125 == 0)
+    {
+      digitalWrite(redPin, !digitalRead(redPin));
+      //digitalWrite(bluePin, !digitalRead(bluePin));
+      digitalWrite(greenPin, !digitalRead(greenPin));
+    }
+
+    if (loopCounter == 2000)
+    {
+      state++;
+      loopCounter = 0;
+    }
+  }
+
+  if (state == 2)
+  {
+    // ESC calibration, wait for maximum throttle
     if (loopCounter == 0)
     {
       Serial.println(">> ESC Calibration.");
@@ -114,16 +184,16 @@ void loop()
     }
     loopCounter++;
 
-    if (receiverThrottle > 1975)
+    if (receiverThrottle > 1990)
     {
       Serial.print("... Maximum throttle detected: ");
       Serial.println(receiverThrottle);
-      state = 1;
+      state++;
       loopCounter = 0;
     }
   }
 
-  if (state == 1)
+  if (state == 3)
   {
     if (loopCounter == 0)
     {
@@ -138,10 +208,10 @@ void loop()
     }
 
     // Throttle is maximum, send esc pulses
-    if (receiverThrottle > 1975)
+    if (receiverThrottle > 1990)
       escPulseOutput(receiverThrottle);
 
-    if (loopCounter == 1125)
+    if (loopCounter == 2125)
     {
       state = -1;
       Serial.println("!!! ESC calibraiton failed. Waited too long for minimum throttle.");
@@ -150,16 +220,16 @@ void loop()
 
     loopCounter++;
 
-    if (receiverThrottle < 1025)
+    if (receiverThrottle < 1010)
     {
       Serial.print("... Minimum throttle detected: ");
       Serial.println(receiverThrottle);
-      state = 2;
+      state++;
       loopCounter = 0;
     }
   }
 
-  if (state == 2)
+  if (state == 4)
   {
     // Wait for ESC to takie the minimum throttle
     loopCounter++;
@@ -169,11 +239,11 @@ void loop()
     {
       Serial.println("... ESC calibration finished.");
       loopCounter = 0;
-      state = 3;
+      state++;
     }
   }
 
-  if (state == 3)
+  if (state == 5)
   {
     if (loopCounter == 0)
     {
@@ -212,13 +282,12 @@ void loop()
       }
       else if (data == '5')
       {
-
         Serial.println("... Testing all motors. Move throttle to test.");
         motorTestOption = 5;
       }
       else if (data == '6')
       {
-        state = 4;
+        state++;
         loopCounter = 0;
         motorTestOption = 0;
         Serial.println("... Testing motors done.");
@@ -238,10 +307,12 @@ void loop()
       escPulseFL = 1000;
     if (motorTestOption == 2)
       escPulseFR = receiverThrottle;
-    else escPulseFR = 1000;
+    else
+      escPulseFR = 1000;
     if (motorTestOption == 3)
       escPulseRR = receiverThrottle;
-    else escPulseRR = 1000;
+    else
+      escPulseRR = 1000;
     if (motorTestOption == 4)
       escPulseRL = receiverThrottle;
     else
@@ -254,7 +325,7 @@ void loop()
       escPulseOutput();
   }
 
-  if (state == 4)
+  if (state == 6)
   {
     if (loopCounter == 0)
     {
@@ -273,7 +344,7 @@ void loop()
         if (start && receiverThrottle < 1050 && receiverYaw > 1950)
         {
           start = false;
-          state = 5;
+          state++;
           loopCounter = 0;
         }
         printSignals();
@@ -283,11 +354,11 @@ void loop()
     escPulseOutput(1000);
   }
 
-  if (state == 5)
+  if (state == 7)
   {
     if (loopCounter == 0)
     {
-      startGyro();
+      startGyro();  
     }
     else if (loopCounter == 250)
       Serial.println(">>> Calibrating gyro in 3 seconds. Don't move the quadcopter!");
@@ -376,8 +447,8 @@ void checkReceiverData()
 
 void escPulseOutput(int pulse)
 {
-  escPulseFL = pulse;
   escPulseFR = pulse;
+  escPulseFL = pulse;
   escPulseRR = pulse;
   escPulseRL = pulse;
   escPulseOutput();
@@ -385,37 +456,37 @@ void escPulseOutput(int pulse)
 
 void escPulseOutput()
 {
-  long timeStamp = micros();
-  int pulsesDone = 0;
+  unsigned long timeStamp = micros();
+  bool FLdone = false, FRdone = false, RRdone = false, RLdone = false;
   PORTD |= B00011000;   // set D3 (PD3) (RL) and D4 (PD4) (RR) to high
   PORTB |= B00000110;   // set D9 (PB1) (FR) and D10 (PB2) (FL) to high
-  long pulseOverRR = escPulseRR + timeStamp;
-  long pulseOverRL = escPulseRL + timeStamp;
-  long pulseOverFR = escPulseFR + timeStamp;
-  long pulseOverFL = escPulseFL + timeStamp;
+  unsigned long pulseOverRR = escPulseRR + timeStamp;
+  unsigned long pulseOverRL = escPulseRL + timeStamp;
+  unsigned long pulseOverFR = escPulseFR + timeStamp;
+  unsigned long pulseOverFL = escPulseFL + timeStamp;
 
-  while (pulsesDone < 4)
+  while (!(FLdone && FRdone && RRdone && RLdone))
   {
     timeStamp = micros();
     if (timeStamp >= pulseOverRR)
     {
       PORTD &= B11101111;
-      pulsesDone++;
+      RRdone = true;
     }
     if (timeStamp >= pulseOverRL)
     {
       PORTD &= B11110111;
-      pulsesDone++;
+      RLdone = true;
     }
     if (timeStamp >= pulseOverFR)
     {
       PORTB &= B11111101;
-      pulsesDone++;
+      FRdone = true;
     }
     if (timeStamp >= pulseOverFL)
     {
       PORTB &= B11111011;
-      pulsesDone++;
+      FLdone = true;
     }
   }
 }
@@ -525,9 +596,11 @@ void calculateAngles()
   //Accelerometer angle calculations
   accVector = sqrt((accX * accX) + (accY * accY) + (accZ * accZ));
 
-  //57.296 = 1 / (3.142 / 180) The Arduino asin function is in radians
-  float anglePitchAcc = asin((float)accY / accVector) * 57.296;             //Calculate the pitch angle.
-  float angleRollAcc = asin((float)accX / accVector) * -57.296;             //Calculate the roll angle.
+  if (abs(accY) < accVector)
+    anglePitchAcc = asin((float)accY / accVector) * 57.296;
+
+  if (abs(accX) < accVector)
+    angleRollAcc = asin((float)accX / accVector) * -57.296;
 
   if (!firstAngle)
   {
@@ -535,7 +608,7 @@ void calculateAngles()
     angleRoll = angleRollAcc;                                                   //Set the roll angle to the accelerometer angle.
     firstAngle = true;
   }
-  else 
+  else
   {
     anglePitch = anglePitch * 0.9996 + anglePitchAcc * 0.0004;                 //Correct the drift of the gyro pitch angle with the accelerometer pitch angle.
     angleRoll = angleRoll * 0.9996 + angleRollAcc * 0.0004;                    //Correct the drift of the gyro roll angle with the accelerometer roll angle.
