@@ -28,7 +28,7 @@
 #include <SPI.h>
 
 // Time
-long nextRefreshTime = refreshPeriod;
+unsigned long loopTimer;
 
 // Receiver
 RF24 radio(CE, CS);
@@ -99,6 +99,7 @@ void setup()
 
   state = 0;
   loopCounter = 0;
+  loopTimer = micros();
 }
 
 void loop()
@@ -106,8 +107,8 @@ void loop()
   if (state < 0) return;
 
   // wait for the refresh period to pass
-  while (nextRefreshTime - micros() < refreshPeriod) { }
-  nextRefreshTime = micros() + refreshPeriod;
+  while (micros() - loopTimer < refreshPeriod) { }
+  loopTimer = micros();
 
   readReceiver();
 
