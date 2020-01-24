@@ -4,15 +4,18 @@
 
 #define   AUTO_LEVEL      false
 
-#define   MAX_THROTTLE    1500
+#define   MAX_THROTTLE    1700
 #define   MIN_SPEED       1000
-#define   MAX_SPEED       2000
+#define   MAX_SPEED       1700
 #define   IDLE_SPEED      1100
 
-#define   escPinRR        4
-#define   escPinRL        3
-#define   escPinFL        10
-#define   escPinFR        9
+#define   MIN_SIGNAL      1000
+#define   MAX_SIGNAL      2000
+
+#define   escPinFL        3
+#define   escPinFR        4
+#define   escPinRR        9
+#define   escPinRL        10
 
 #define   redPin          6
 #define   greenPin        A1
@@ -23,22 +26,13 @@
 #define   MAX_MEAS_VOLT   12650
 #define   MIN_BAT_VOLT    10000
 #define   MAX_BAT_VOLT    12600
-#define   DIODE_MIN_VOLT  800
+#define   DIODE_MIN_VOLT  400
 
 #define   radioPinCE      7
 #define   radioPinCS      8
 
 #define   refreshPeriod   4000 // us
 
-#define   rollKP          1.3f
-#define   rollKI          0.04f
-#define   rollKD          18.0f
-#define   pitchKP         rollKP
-#define   pitchKI         rollKI
-#define   pitchKD         rollKD
-#define   yawKP           4.0f
-#define   yawKI           0.02f
-#define   yawKD           0.0f
 #define   DEAD_BAND       8
 
 //=======================================//
@@ -53,8 +47,7 @@
 //=======================================//
 
 // Timing stuff
-unsigned long timer = 0;
-unsigned long nextRefreshTime = refreshPeriod;
+unsigned long loopTimer = 0;
 
 // Receiver
 RF24 radio(radioPinCE, radioPinCS);
@@ -90,6 +83,17 @@ float rollIntegral, pitchIntegral, yawIntegral;
 float rollDerivative, pitchDerivative, yawDerivative;
 float rollPID, pitchPID, yawPID;
 
+
+float rollKP = 0; // 1.3
+float rollKI = 0;  //0.04
+float rollKD = 3.0f;  //18.0
+float pitchKP = rollKP;
+float pitchKI = rollKI;
+float pitchKD = rollKD;
+float yawKP = 3.0f;  //4.0
+float yawKI = 0.02f;  //0.02
+float yawKD = 0.0f;
+
 // Battery
 int batteryVoltage; // mV
 float voltageFactor = MAX_MEAS_VOLT / 1023;
@@ -114,9 +118,9 @@ void setup()
   pinMode(batteryPin, INPUT);
 
   // indicate startup
-  digitalWrite(bluePin, LOW);
-  digitalWrite(greenPin, HIGH);
-  digitalWrite(redPin, HIGH);
+  digitalWrite(bluePin, HIGH);
+  digitalWrite(greenPin, LOW);
+  digitalWrite(redPin, LOW);
 
   radio.begin();
   radio.openReadingPipe(0, txAdress);
@@ -136,8 +140,8 @@ void setup()
   start = false;
   isReady = false;
 
-  timer = micros();
   setupFinished();
+  loopTimer = micros();
 }
 
 void setupFinished()
@@ -167,11 +171,13 @@ void loop()
   checkBattery();
   calculatePulses();
 
-  if (nextRefreshTime - micros() > refreshPeriod + 50) digitalWrite(redPin, HIGH);
+  // if our loop is late more than 50us, indicate error LED
+  if (micros() - loopTimer > refreshPeriod + 50) digitalWrite(redPin, HIGH);
+  loopTimer = micros();
 
-  // wait for the refresh period to pass
-  while (nextRefreshTime - micros() < refreshPeriod) { }
-  nextRefreshTime = micros() + refreshPeriod;
+  // wait for the next loop pulse time
+  while (micros() - loopTimer < refreshPeriod) { }
+  loopTimer = micros();
 
   escPulseOutput();
 }
@@ -329,15 +335,15 @@ void readReceiver()
 
 void checkReceiverData()
 {
-  if (receiverYaw < 1000) receiverYaw = 1000;
-  if (receiverPitch < 1000) receiverPitch = 1000;
-  if (receiverRoll < 1000) receiverRoll = 1000;
-  if (receiverThrottle < MIN_SPEED) receiverThrottle = MIN_SPEED;
+  if (receiverYaw < MIN_SIGNAL) receiverYaw = MIN_SIGNAL;
+  if (receiverPitch < MIN_SIGNAL) receiverPitch = MIN_SIGNAL;
+  if (receiverRoll < MIN_SIGNAL) receiverRoll = MIN_SIGNAL;
+  if (receiverThrottle < MIN_SIGNAL) receiverThrottle = MIN_SIGNAL;
 
-  if (receiverYaw > 2000) receiverYaw = 2000;
-  if (receiverPitch > 2000) receiverPitch = 2000;
-  if (receiverRoll > 2000) receiverRoll = 2000;
-  if (receiverThrottle > MAX_SPEED) receiverThrottle = MAX_SPEED;
+  if (receiverYaw > MAX_SIGNAL) receiverYaw = MAX_SIGNAL;
+  if (receiverPitch > MAX_SIGNAL) receiverPitch = MAX_SIGNAL;
+  if (receiverRoll > MAX_SIGNAL) receiverRoll = MAX_SIGNAL;
+  if (receiverThrottle > MAX_SIGNAL) receiverThrottle = MAX_SIGNAL;
 }
 
 void checkBattery()
@@ -366,7 +372,6 @@ void waitForReceiver()
 void checkStartStopReady()
 {
   if (receiverThrottle < 1050 && receiverYaw < 1050) isReady = true;
-  //When yaw stick is back in the center position start the motors (step 2).
   if (isReady && receiverThrottle < 1050 && receiverYaw > 1450)
   {
     start = true;
@@ -407,10 +412,10 @@ void calculatePulses()
     // If battery connected, compensate for voltage drop
     if (batteryVoltage < MAX_BAT_VOLT && batteryVoltage > MIN_BAT_ON_VOLT)
     {
-      escPulseFL += escPulseFL * ((MAX_BAT_VOLT - batteryVoltage) / (float)3500);
-      escPulseFR += escPulseFR * ((MAX_BAT_VOLT - batteryVoltage) / (float)3500);
-      escPulseRR += escPulseRR * ((MAX_BAT_VOLT - batteryVoltage) / (float)3500);
-      escPulseRL += escPulseRL * ((MAX_BAT_VOLT - batteryVoltage) / (float)3500);
+      escPulseFL += escPulseFL * ((MAX_BAT_VOLT - batteryVoltage) / (float)35000);
+      escPulseFR += escPulseFR * ((MAX_BAT_VOLT - batteryVoltage) / (float)35000);
+      escPulseRR += escPulseRR * ((MAX_BAT_VOLT - batteryVoltage) / (float)35000);
+      escPulseRL += escPulseRL * ((MAX_BAT_VOLT - batteryVoltage) / (float)35000);
     }
 
     if (escPulseFL < IDLE_SPEED) escPulseFL = IDLE_SPEED;
@@ -441,8 +446,8 @@ void calculateAngles()
   angleRoll += gyroRoll * 0.0000611;
 
   //0.000001066 = 0.0000611 * (3.142(PI) / 180degr) The Arduino sin function is in radians
-  anglePitch -= anglePitch * sin(gyroYaw * 0.000001066);
-  angleRoll += angleRoll * sin(gyroYaw * 0.000001066);
+  anglePitch -= angleRoll * sin(gyroYaw * 0.000001066);
+  angleRoll += anglePitch * sin(gyroYaw * 0.000001066);
 
   //Accelerometer angle calculations
   accVector = sqrt((accX * accX) + (accY * accY) + (accZ * accZ));
