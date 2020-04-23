@@ -38,7 +38,7 @@ int receiverData[4];
 
 // Gyro
 byte gyroAddress = 0x68;
-int gyroRoll, gyroPitch, gyroYaw;
+double gyroRoll, gyroPitch, gyroYaw;
 double gyroRollOffset, gyroPitchOffset, gyroYawOffset;
 bool gyroCalibrationDone = false;
 
@@ -569,7 +569,7 @@ void readGyroSignals()
   accX = Wire.read() << 8 | Wire.read();                       //Add the low and high byte to the acc_x variable.
   accY = Wire.read() << 8 | Wire.read();                       //Add the low and high byte to the acc_y variable.
   accZ = Wire.read() << 8 | Wire.read();
-  byte temperature = Wire.read() << 8 | Wire.read();
+  int temperature = Wire.read() << 8 | Wire.read();
   gyroPitch = Wire.read() << 8 | Wire.read();                  //Read high and low part of the angular data
   gyroRoll = Wire.read() << 8 | Wire.read();                   //Read high and low part of the angular data
   gyroYaw = Wire.read() << 8 | Wire.read();                    //Read high and low part of the angular data
@@ -581,6 +581,8 @@ void readGyroSignals()
     gyroPitch -= gyroPitchOffset;
     gyroYaw -= gyroYawOffset;
   }
+
+  gyroYaw *= -1;
 }
 
 void calculateAngles()

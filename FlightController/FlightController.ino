@@ -57,7 +57,7 @@ int receiverData[4];
 
 // Gyro
 byte gyroAddress = 0x68;
-int gyroRoll, gyroPitch, gyroYaw;
+double gyroRoll, gyroPitch, gyroYaw;
 double gyroRollOffset, gyroPitchOffset, gyroYawOffset;
 bool gyroCalibrationDone = false;
 
@@ -84,8 +84,8 @@ float rollDerivative, pitchDerivative, yawDerivative;
 float rollPID, pitchPID, yawPID;
 
 
-float rollKP = 0; // 1.3
-float rollKI = 0;  //0.04
+float rollKP = 1.2; // 1.3
+float rollKI = 0.04;  //0.04
 float rollKD = 3.0f;  //18.0
 float pitchKP = rollKP;
 float pitchKI = rollKI;
@@ -304,10 +304,10 @@ void readSignals()
 
   readReceiver();
 
-  accX = Wire.read() << 8 | Wire.read();
   accY = Wire.read() << 8 | Wire.read();
+  accX = Wire.read() << 8 | Wire.read();
   accZ = Wire.read() << 8 | Wire.read();
-  byte temperature = Wire.read() << 8 | Wire.read();
+  int temperature = Wire.read() << 8 | Wire.read();
   gyroPitch = Wire.read() << 8 | Wire.read();
   gyroRoll = Wire.read() << 8 | Wire.read();
   gyroYaw = Wire.read() << 8 | Wire.read();
@@ -318,6 +318,9 @@ void readSignals()
     gyroPitch -= gyroPitchOffset;
     gyroYaw -= gyroYawOffset;
   }
+
+  // invert yaw axis
+  gyroYaw *= -1;
 }
 
 void readReceiver()
